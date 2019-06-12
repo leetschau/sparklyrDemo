@@ -1,0 +1,5 @@
+packrat/lib*/
+.Rproj.user
+*.html
+derby.log
+metastore_db/

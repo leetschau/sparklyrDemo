@@ -1,0 +1,58 @@
+---
+title: "基于 Sparklyr 的数据探索和分布式计算平台"
+output: html_notebook
+---
+
+# Hello World
+
+## 环境准备
+
+安装 `sparklyr`, `dplyr`, `ggolot2`，以及 `nycflights13`, `Lahman` 两个数据包。
+下载并解压 Apache Spark 2.3.3 到目录 `$HOME/apps/spark-2.3.3-bin-hadoop2.7`，
+
+## 实现过程
+
+初始化并连接 Spark 集群：
+```{r}
+library(sparklyr)
+library(dplyr)
+library(ggplot2)
+library(nycflights13)
+library(Lahman)
+sc <- spark_connect(master = "local", spark_home = "/home/leo/apps/spark-2.3.3-bin-hadoop2.7/")
+```
+
+将测试数据倒入 Spark 计算环境中：
+```{r}
+iris_tbl <- copy_to(sc, iris)
+flights_tbl <- copy_to(sc, flights, "flights")
+batting_tbl <- copy_to(sc, Batting, "batting")
+flights_tbl %>% filter(dep_delay == 2)
+src_tbls(sc)  # 列出一个 remote source 中所有的 data frame
+```
+
+`copy_to(sc, flights, "flights")` 将本地 dataframe `flights` 上传到 remote data source `sc`，名称为 `flights`，返回一个 remote source `sc` 中的 *tbl* 对象 (data frame?).
+
+注意 `copy_to()` 函数不是幂等的，也就是说，如果一个数据集被拷贝到 Spark 环境中，
+再次拷贝时会报错，除非将函数的 `overwrite` 参数设置为 `TRUE`。
+
+`sc` 中的 data frame 会出现在 RStudio 中的 *Connections* 中。
+
+分布式 split-apply-combine 过程：
+```{r}
+delay <- flights_tbl %>% 
+  group_by(tailnum) %>%
+  summarise(count = n(), dist = mean(distance), delay = mean(arr_delay)) %>%
+  filter(count > 20, dist < 2000, !is.na(delay)) %>%
+  collect
+ggplot(delay, aes(dist, delay)) +
+  geom_point(aes(size = count), alpha = 1/2) +
+  geom_smooth() +
+  scale_size_area(max_size = 2)
+```
+
+## 备注
+
+`spark_install(version = "2.1.0")` 自动下载 Spark 安装包并解压到 ~/spark/spark-2.1.0-bin-hadoop2.7，
+所以不要用它，手工安装 Spark 2.3.3 到 ~/apps/spark-2.3.3-bin-hadoop2.7/。
+
